@@ -13,7 +13,7 @@ export default function Apropos() {
           <a href="/tarifs" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Tarifs</a>
           <a href="/faq" className="text-sm text-gray-500 hover:text-[#1a2e5a]">FAQ</a>
           <a href="/apropos" className="text-sm text-[#1a2e5a] font-medium">À propos</a>
-          <a href="/chat" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
+          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
             Commencer gratuitement
           </a>
         </div>
@@ -113,7 +113,7 @@ export default function Apropos() {
             <a href="mailto:contact@orthos.fr" className="bg-[#d4af37] text-[#1a2e5a] px-6 py-3 rounded-lg font-semibold hover:opacity-90 transition">
               contact@orthos.fr
             </a>
-            <a href="/chat" className="border border-blue-300 text-white px-6 py-3 rounded-lg font-medium hover:bg-[#243a6e] transition">
+            <a href="/auth" className="border border-blue-300 text-white px-6 py-3 rounded-lg font-medium hover:bg-[#243a6e] transition">
               Essayer ORTHOS →
             </a>
           </div>

@@ -14,7 +14,7 @@ export default function Fonctionnalites() {
           <a href="/tarifs" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Tarifs</a>
           <a href="/faq" className="text-sm text-gray-500 hover:text-[#1a2e5a]">FAQ</a>
           <a href="/apropos" className="text-sm text-gray-500 hover:text-[#1a2e5a]">À propos</a>
-          <a href="/chat" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
+          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
             Commencer gratuitement
           </a>
         </div>
@@ -97,7 +97,7 @@ export default function Fonctionnalites() {
                   </li>
                 ))}
               </ul>
-              <a href="/chat" className="inline-block mt-6 bg-[#1a2e5a] text-white px-6 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition">
+              <a href="/auth" className="inline-block mt-6 bg-[#1a2e5a] text-white px-6 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition">
                 Essayer ce mode →
               </a>
             </div>
@@ -139,7 +139,7 @@ export default function Fonctionnalites() {
         <div className="max-w-xl mx-auto">
           <h2 className="text-3xl font-bold text-white mb-4">Prêt à essayer ?</h2>
           <p className="text-blue-200 mb-8">Toutes ces fonctionnalités sont disponibles gratuitement dès maintenant.</p>
-          <a href="/chat" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
+          <a href="/auth" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
             Commencer gratuitement →
           </a>
         </div>

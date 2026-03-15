@@ -13,7 +13,7 @@ export default function Home() {
           <a href="/tarifs" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Tarifs</a>
           <a href="/faq" className="text-sm text-gray-500 hover:text-[#1a2e5a]">FAQ</a>
           <a href="/apropos" className="text-sm text-gray-500 hover:text-[#1a2e5a]">À propos</a>
-          <a href="/chat" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
+          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
             Commencer gratuitement
           </a>
         </div>
@@ -32,7 +32,7 @@ export default function Home() {
             Orthos t'accompagne avec un assistant IA juridique, des fiches de révision et des quiz conçus spécialement pour les étudiants en faculté de droit.
           </p>
           <div className="flex gap-4 justify-center">
-            <a href="/chat" className="bg-[#1a2e5a] text-white px-8 py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-2">
+            <a href="/auth" className="bg-[#1a2e5a] text-white px-8 py-3 rounded-lg font-medium hover:opacity-90 transition flex items-center gap-2">
               Découvrir gratuitement →
             </a>
             <a href="#fonctionnalites" className="border border-gray-300 text-[#1a2e5a] px-8 py-3 rounded-lg font-medium hover:bg-gray-50 transition">
@@ -144,7 +144,7 @@ export default function Home() {
                 <div className="text-lg font-semibold text-[#1a2e5a] mb-1">{plan.name}</div>
                 <div className="text-3xl font-bold text-[#1a2e5a] mb-1">{plan.price}</div>
                 <div className="text-sm text-gray-400 mb-6">{plan.period}</div>
-                <a href="/chat" className="block text-center bg-[#1a2e5a] text-white py-2 rounded-lg text-sm font-medium hover:opacity-90 transition mb-6">
+                <a href="/auth" className="block text-center bg-[#1a2e5a] text-white py-2 rounded-lg text-sm font-medium hover:opacity-90 transition mb-6">
                   {plan.cta}
                 </a>
                 <ul className="space-y-2">
@@ -190,7 +190,7 @@ export default function Home() {
         <div className="max-w-2xl mx-auto">
           <h2 className="text-3xl font-bold text-white mb-4">Prêt à réussir tes études de droit ?</h2>
           <p className="text-blue-200 mb-8 leading-relaxed">Rejoins les étudiants qui utilisent ORTHOS pour comprendre, réviser et exceller en droit français.</p>
-          <a href="/chat" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
+          <a href="/auth" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
             Commencer gratuitement →
           </a>
         </div>

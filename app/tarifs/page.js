@@ -13,7 +13,7 @@ export default function Tarifs() {
           <a href="/tarifs" className="text-sm text-[#1a2e5a] font-medium">Tarifs</a>
           <a href="/faq" className="text-sm text-gray-500 hover:text-[#1a2e5a]">FAQ</a>
           <a href="/apropos" className="text-sm text-gray-500 hover:text-[#1a2e5a]">À propos</a>
-          <a href="/chat" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
+          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
             Commencer gratuitement
           </a>
         </div>
@@ -115,7 +115,7 @@ export default function Tarifs() {
                 <div className="text-sm text-gray-400 mb-3">{plan.period}</div>
                 <p className="text-sm text-gray-500">{plan.desc}</p>
               </div>
-              <a href="/chat" className="block text-center bg-[#1a2e5a] text-white py-3 rounded-xl text-sm font-medium hover:opacity-90 transition mb-6">
+              <a href="/auth" className="block text-center bg-[#1a2e5a] text-white py-3 rounded-xl text-sm font-medium hover:opacity-90 transition mb-6">
                 {plan.cta}
               </a>
               <ul className="space-y-3 flex-1">
@@ -166,7 +166,7 @@ export default function Tarifs() {
         <div className="max-w-xl mx-auto">
           <h2 className="text-2xl font-bold text-white mb-3">Commence gratuitement dès aujourd'hui</h2>
           <p className="text-blue-200 mb-6">Aucune carte bancaire requise pour le plan gratuit.</p>
-          <a href="/chat" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
+          <a href="/auth" className="inline-block bg-[#d4af37] text-[#1a2e5a] px-8 py-3 rounded-lg font-semibold hover:opacity-90 transition">
             Découvrir ORTHOS →
           </a>
         </div>
