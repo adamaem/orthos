@@ -16,7 +16,7 @@ export default function Dashboard() {
     derniersQuiz: [],
     evolutionQuiz: [],
     statsParPeriode: { '7j': null, '15j': null, '30j': null, '90j': null },
-    questionsRepond usMois: 0,
+    questionsMois: 0,
     joursConnectesSuite: 0,
     calendrierConnexions: [],
     prochainRevisions: [],
