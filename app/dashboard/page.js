@@ -6,9 +6,11 @@ import { useRouter } from 'next/navigation'
 export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [showNotifPopup, setShowNotifPopup] = useState(false)
   const [stats, setStats] = useState({
     flashcardsTotal: 0,
     flashcardsAReviser: 0,
+    flashcardsAReviserDetails: [],
     quizTotal: 0,
     quizMoyenne: 0,
     meilleureMatiere: '-',
@@ -18,7 +20,7 @@ export default function Dashboard() {
     statsParPeriode: { '7j': null, '15j': null, '30j': null, '90j': null },
     questionsMois: 0,
     joursConnectesSuite: 0,
-    calendrierConnexions: [],
+    calendrierMois: [],
     prochainRevisions: [],
   })
   const router = useRouter()
@@ -46,29 +48,30 @@ export default function Dashboard() {
   const chargerStats = async (userId) => {
     const maintenant = new Date()
 
-    // Flashcards
     const { data: flashcards } = await supabase
       .from('flashcards').select('*').eq('user_id', userId)
 
-    // Quiz
     const { data: quizResults } = await supabase
       .from('quiz_resultats').select('*').eq('user_id', userId)
       .order('created_at', { ascending: true })
 
-    // Connexions (90 derniers jours)
     const il90jours = new Date(); il90jours.setDate(il90jours.getDate() - 90)
     const { data: connexions } = await supabase
       .from('connexions').select('date').eq('user_id', userId)
       .gte('date', il90jours.toISOString().split('T')[0])
       .order('date', { ascending: false })
 
-    // --- Calculs flashcards ---
-    const aReviser = flashcards?.filter(fc => new Date(fc.prochaine_revision) <= maintenant).length || 0
+    // --- Flashcards à réviser ---
+    const aReviserDetails = flashcards?.filter(fc => new Date(fc.prochaine_revision) <= maintenant) || []
+    const aReviser = aReviserDetails.length
+
+    // Afficher popup si cartes à réviser
+    if (aReviser > 0) setShowNotifPopup(true)
+
     const niveaux = { 0: 0, 1: 0, 2: 0, 3: 0 }
     flashcards?.forEach(fc => { const n = Math.min(fc.niveau || 0, 3); niveaux[n]++ })
 
-    // Prochaines révisions (7 prochains jours)
-    const dans7jours = new Date(); dans7jours.setDate(dans7jours.getDate() + 7)
+    // Prochaines révisions (8 prochains jours)
     const prochainRevisions = []
     for (let i = 0; i <= 7; i++) {
       const jour = new Date(); jour.setDate(jour.getDate() + i)
@@ -77,10 +80,13 @@ export default function Dashboard() {
         const rev = new Date(fc.prochaine_revision).toISOString().split('T')[0]
         return rev === jourStr
       }).length || 0
-      prochainRevisions.push({ date: jourStr, count, label: i === 0 ? "Aujourd'hui" : i === 1 ? 'Demain' : jour.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }) })
+      prochainRevisions.push({
+        date: jourStr, count,
+        label: i === 0 ? "Aujourd'hui" : i === 1 ? 'Demain' : jour.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })
+      })
     }
 
-    // --- Calculs quiz ---
+    // --- Quiz ---
     const calculerStatsPeriode = (jours) => {
       const debut = new Date(); debut.setDate(debut.getDate() - jours)
       const filtered = quizResults?.filter(q => new Date(q.created_at) >= debut) || []
@@ -90,7 +96,6 @@ export default function Dashboard() {
       return { moyenne: moy, count: filtered.length, questions }
     }
 
-    // Évolution 30 derniers jours (groupé par semaine)
     const evolutionQuiz = []
     for (let i = 3; i >= 0; i--) {
       const debut = new Date(); debut.setDate(debut.getDate() - (i + 1) * 7)
@@ -100,19 +105,13 @@ export default function Dashboard() {
         return d >= debut && d < fin
       }) || []
       const moy = filtered.length > 0 ? Math.round(filtered.reduce((acc, q) => acc + q.pourcentage, 0) / filtered.length) : null
-      evolutionQuiz.push({
-        label: `S-${i === 0 ? 'cette sem.' : i}`,
-        moyenne: moy,
-        count: filtered.length
-      })
+      evolutionQuiz.push({ label: i === 0 ? 'Cette sem.' : `S-${i}`, moyenne: moy, count: filtered.length })
     }
 
-    // Questions répondues ce mois
     const debutMois = new Date(); debutMois.setDate(1); debutMois.setHours(0,0,0,0)
     const quizMois = quizResults?.filter(q => new Date(q.created_at) >= debutMois) || []
     const questionsMois = quizMois.reduce((acc, q) => acc + q.total, 0)
 
-    // Meilleure matière
     let meilleureMatiere = '-'
     if (quizResults?.length > 0) {
       const parMatiere = {}
@@ -127,7 +126,7 @@ export default function Dashboard() {
       })
     }
 
-    // --- Calculs connexions ---
+    // --- Connexions ---
     const datesConnexions = new Set(connexions?.map(c => c.date) || [])
     let joursConnectesSuite = 0
     const today = new Date()
@@ -138,17 +137,39 @@ export default function Dashboard() {
       else break
     }
 
-    // Calendrier 30 derniers jours
-    const calendrier = []
-    for (let i = 29; i >= 0; i--) {
-      const d = new Date(); d.setDate(d.getDate() - i)
+    // Calendrier mois complet (comme Google Calendar)
+    const maintenant2 = new Date()
+    const annee = maintenant2.getFullYear()
+    const mois = maintenant2.getMonth()
+    const premierJourMois = new Date(annee, mois, 1)
+    const dernierJourMois = new Date(annee, mois + 1, 0)
+    // Jour de la semaine du 1er (0=dim, on veut 0=lun)
+    let premierJourSemaine = premierJourMois.getDay()
+    premierJourSemaine = premierJourSemaine === 0 ? 6 : premierJourSemaine - 1
+
+    const calendrierMois = []
+    // Cases vides avant le 1er
+    for (let i = 0; i < premierJourSemaine; i++) {
+      calendrierMois.push({ vide: true })
+    }
+    // Jours du mois
+    for (let j = 1; j <= dernierJourMois.getDate(); j++) {
+      const d = new Date(annee, mois, j)
       const ds = d.toISOString().split('T')[0]
-      calendrier.push({ date: ds, connecte: datesConnexions.has(ds) })
+      const estAujourdhui = j === maintenant2.getDate()
+      const estConnecte = datesConnexions.has(ds)
+      // Compter flashcards à réviser ce jour
+      const flashcardsJour = flashcards?.filter(fc => {
+        const rev = new Date(fc.prochaine_revision).toISOString().split('T')[0]
+        return rev === ds
+      }).length || 0
+      calendrierMois.push({ vide: false, jour: j, ds, estAujourdhui, estConnecte, flashcardsJour })
     }
 
     setStats({
       flashcardsTotal: flashcards?.length || 0,
       flashcardsAReviser: aReviser,
+      flashcardsAReviserDetails: aReviserDetails,
       quizTotal: quizResults?.length || 0,
       quizMoyenne: calculerStatsPeriode(9999)?.moyenne || 0,
       meilleureMatiere,
@@ -163,7 +184,7 @@ export default function Dashboard() {
       },
       questionsMois,
       joursConnectesSuite,
-      calendrierConnexions: calendrier,
+      calendrierMois,
       prochainRevisions,
     })
   }
@@ -173,6 +194,14 @@ export default function Dashboard() {
     router.push('/')
   }
 
+  // Flammes selon la série
+  const getFlammes = (jours) => {
+    if (jours >= 30) return '🔥🔥🔥'
+    if (jours >= 14) return '🔥🔥'
+    if (jours >= 3) return '🔥'
+    return '✨'
+  }
+
   if (loading) return (
     <div className="min-h-screen bg-[#f4f5f7] flex items-center justify-center">
       <div className="text-[#1a2e5a] font-medium">Chargement…</div>
@@ -180,13 +209,55 @@ export default function Dashboard() {
   )
 
   const prenom = user?.user_metadata?.full_name?.split(' ')[0] || 'Étudiant'
-  const maxEvolution = Math.max(...stats.evolutionQuiz.map(e => e.moyenne || 0), 1)
+  const moisNoms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre']
+  const moisActuel = moisNoms[new Date().getMonth()]
+  const anneeActuelle = new Date().getFullYear()
 
   return (
     <main className="min-h-screen bg-[#f4f5f7] font-sans">
 
+      {/* POPUP NOTIFICATION RÉVISION */}
+      {showNotifPopup && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+            <div className="text-4xl mb-4 text-center">🔔</div>
+            <h2 className="text-xl font-bold text-[#1a2e5a] text-center mb-2">
+              {stats.flashcardsAReviser} flashcard{stats.flashcardsAReviser > 1 ? 's' : ''} à réviser !
+            </h2>
+            <p className="text-gray-400 text-sm text-center mb-6">
+              L'algorithme de répétition espacée a sélectionné ces cartes pour maximiser votre mémorisation.
+            </p>
+            {/* Aperçu des matières à réviser */}
+            <div className="bg-[#f4f5f7] rounded-xl p-4 mb-6 max-h-32 overflow-y-auto">
+              {Object.entries(
+                stats.flashcardsAReviserDetails.reduce((acc, fc) => {
+                  const mat = fc.matiere || 'Mes flashcards'
+                  acc[mat] = (acc[mat] || 0) + 1
+                  return acc
+                }, {})
+              ).map(([mat, count]) => (
+                <div key={mat} className="flex justify-between text-sm py-1">
+                  <span className="text-gray-600">{mat}</span>
+                  <span className="font-semibold text-[#1a2e5a]">{count} carte{count > 1 ? 's' : ''}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowNotifPopup(false)}
+                className="flex-1 border border-gray-200 text-gray-500 py-3 rounded-xl text-sm font-medium hover:bg-gray-50 transition">
+                Plus tard
+              </button>
+              <a href="/flashcards"
+                className="flex-1 bg-[#d4af37] text-white py-3 rounded-xl text-sm font-medium hover:opacity-90 transition text-center">
+                Réviser maintenant →
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* NAVBAR */}
-      <nav className="bg-white border-b border-gray-200 px-8 h-16 flex items-center sticky top-0 z-50">
+      <nav className="bg-white border-b border-gray-200 px-8 h-16 flex items-center sticky top-0 z-40">
         <a href="/" className="flex items-center gap-3">
           <img src="/logo.png" alt="Orthos" className="h-10 w-10 object-contain" />
           <span className="text-[#1a2e5a] font-semibold text-xl">Orthos</span>
@@ -194,6 +265,16 @@ export default function Dashboard() {
         <div className="ml-auto flex items-center gap-6">
           <a href="/chat" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Assistant IA</a>
           <a href="/tarifs" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Tarifs</a>
+          {/* Badge notification navbar */}
+          {stats.flashcardsAReviser > 0 && (
+            <button onClick={() => setShowNotifPopup(true)}
+              className="relative text-gray-400 hover:text-[#1a2e5a] transition">
+              <span className="text-xl">🔔</span>
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center font-bold">
+                {stats.flashcardsAReviser > 9 ? '9+' : stats.flashcardsAReviser}
+              </span>
+            </button>
+          )}
           <div className="w-8 h-8 rounded-full bg-[#1a2e5a] flex items-center justify-center text-[#d4af37] font-bold text-sm">
             {prenom[0].toUpperCase()}
           </div>
@@ -210,14 +291,15 @@ export default function Dashboard() {
             <h1 className="text-2xl font-bold text-[#1a2e5a]">Ravi de te revoir, {prenom} ! 👋</h1>
             <p className="text-gray-400 text-sm mt-1">
               {stats.joursConnectesSuite > 1
-                ? `🔥 ${stats.joursConnectesSuite} jours de suite — continuez comme ça !`
+                ? `${getFlammes(stats.joursConnectesSuite)} ${stats.joursConnectesSuite} jours de suite — continuez comme ça !`
                 : "Votre parcours d'apprentissage se poursuit"}
             </p>
           </div>
           {stats.flashcardsAReviser > 0 && (
-            <a href="/flashcards" className="bg-[#d4af37] text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition flex items-center gap-2">
+            <button onClick={() => setShowNotifPopup(true)}
+              className="bg-[#d4af37] text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition flex items-center gap-2">
               🔔 {stats.flashcardsAReviser} carte{stats.flashcardsAReviser > 1 ? 's' : ''} à réviser
-            </a>
+            </button>
           )}
         </div>
       </section>
@@ -244,13 +326,15 @@ export default function Dashboard() {
             <div className="text-xs text-gray-400">{stats.meilleureMatiere !== '-' ? `🏆 ${stats.meilleureMatiere}` : 'Aucun quiz encore'}</div>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <div className="text-3xl font-bold text-[#1a2e5a] mb-1">{stats.joursConnectesSuite}</div>
+            <div className="text-3xl font-bold text-[#1a2e5a] mb-1">
+              {getFlammes(stats.joursConnectesSuite)} {stats.joursConnectesSuite}
+            </div>
             <div className="text-sm font-medium text-gray-600 mb-1">Jours consécutifs</div>
-            <div className="text-xs text-gray-400">{stats.joursConnectesSuite >= 7 ? '🔥 En feu !' : stats.joursConnectesSuite >= 3 ? '💪 Bonne série !' : 'Revenez chaque jour'}</div>
+            <div className="text-xs text-gray-400">{stats.joursConnectesSuite >= 30 ? '🏆 Légendaire !' : stats.joursConnectesSuite >= 14 ? '🔥🔥 En feu !' : stats.joursConnectesSuite >= 7 ? '🔥 Excellente série !' : stats.joursConnectesSuite >= 3 ? '💪 Bonne série !' : 'Revenez chaque jour'}</div>
           </div>
         </div>
 
-        {/* ÉVOLUTION + CALENDRIER */}
+        {/* ÉVOLUTION + CALENDRIER MOIS */}
         <div className="grid grid-cols-2 gap-6">
 
           {/* Évolution taux de réussite */}
@@ -265,7 +349,7 @@ export default function Dashboard() {
                     <span className="text-xs font-semibold text-[#1a2e5a]">{sem.moyenne !== null ? `${sem.moyenne}%` : '-'}</span>
                     <div className="w-full rounded-t-lg transition-all"
                       style={{
-                        height: sem.moyenne !== null ? `${Math.max((sem.moyenne / 100) * 96, 8)}px` : '8px',
+                        height: sem.moyenne !== null ? `${Math.max((sem.moyenne / 100) * 80, 8)}px` : '8px',
                         backgroundColor: sem.moyenne !== null
                           ? sem.moyenne >= 80 ? '#22c55e' : sem.moyenne >= 50 ? '#d4af37' : '#1a2e5a'
                           : '#e5e7eb'
@@ -279,20 +363,44 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Calendrier connexions */}
+          {/* VRAI CALENDRIER MOIS */}
           <div className="bg-white border border-gray-200 rounded-xl p-6">
-            <h3 className="text-sm font-semibold text-gray-600 mb-4">📅 Jours de connexion (30 derniers jours)</h3>
-            <div className="grid grid-cols-10 gap-1 mb-3">
-              {stats.calendrierConnexions.map((jour, i) => (
-                <div key={i}
-                  title={jour.date}
-                  className={`w-6 h-6 rounded-sm ${jour.connecte ? 'bg-[#1a2e5a]' : 'bg-gray-100'}`}>
-                </div>
+            <h3 className="text-sm font-semibold text-gray-600 mb-1">📅 {moisActuel} {anneeActuelle}</h3>
+            <p className="text-xs text-gray-400 mb-3">Connexions et révisions du mois</p>
+
+            {/* Jours de la semaine */}
+            <div className="grid grid-cols-7 mb-1">
+              {['L','M','M','J','V','S','D'].map((j, i) => (
+                <div key={i} className="text-center text-xs text-gray-400 font-medium py-1">{j}</div>
               ))}
             </div>
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-gray-100"></div> Absent</div>
-              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-sm bg-[#1a2e5a]"></div> Connecté</div>
+
+            {/* Grille calendrier */}
+            <div className="grid grid-cols-7 gap-1">
+              {stats.calendrierMois.map((cell, i) => {
+                if (cell.vide) return <div key={i}></div>
+                return (
+                  <div key={i}
+                    title={cell.flashcardsJour > 0 ? `${cell.flashcardsJour} carte(s) à réviser` : ''}
+                    className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-xs font-medium transition cursor-default
+                      ${cell.estAujourdhui ? 'ring-2 ring-[#1a2e5a]' : ''}
+                      ${cell.estConnecte ? 'bg-[#1a2e5a] text-white' : 'bg-gray-50 text-gray-500'}
+                    `}>
+                    <span>{cell.jour}</span>
+                    {cell.estConnecte && <span className="text-xs leading-none">🔥</span>}
+                    {cell.flashcardsJour > 0 && !cell.estConnecte && (
+                      <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-[#d4af37] rounded-full"></div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Légende */}
+            <div className="flex items-center gap-4 mt-3 text-xs text-gray-400 flex-wrap">
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-[#1a2e5a]"></div> Connecté 🔥</div>
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-gray-100 border border-gray-200"></div> Absent</div>
+              <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-[#d4af37]"></div> Révisions</div>
             </div>
           </div>
         </div>
@@ -327,29 +435,34 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* RAPPELS RÉVISIONS FLASHCARDS */}
+        {/* PLANNING RÉVISION FLASHCARDS */}
         {stats.flashcardsTotal > 0 && (
           <div className="bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="text-sm font-semibold text-gray-600 mb-1">🔔 Planning de révision des flashcards</h3>
-            <p className="text-xs text-gray-400 mb-4">Basé sur l'algorithme de répétition espacée (SM-2)</p>
+            <p className="text-xs text-gray-400 mb-4">Intervalles SM-2 : 1j → 3j → 7j → 14j → 1 mois → 3 mois</p>
             <div className="flex gap-3 overflow-x-auto pb-2">
               {stats.prochainRevisions.map((jour, i) => (
-                <div key={i} className={`flex-shrink-0 text-center rounded-xl p-4 min-w-16 border ${
-                  i === 0 && jour.count > 0 ? 'bg-[#d4af37] border-[#d4af37] text-white' :
+                <div key={i} className={`flex-shrink-0 text-center rounded-xl p-4 w-20 border transition ${
+                  i === 0 && jour.count > 0 ? 'bg-[#d4af37] border-[#d4af37]' :
                   jour.count > 0 ? 'bg-[#eef1f8] border-[#1a2e5a]' :
                   'bg-gray-50 border-gray-200'
                 }`}>
-                  <div className={`text-xl font-bold ${i === 0 && jour.count > 0 ? 'text-white' : jour.count > 0 ? 'text-[#1a2e5a]' : 'text-gray-300'}`}>
-                    {jour.count}
+                  <div className={`text-xl font-bold ${
+                    i === 0 && jour.count > 0 ? 'text-white' :
+                    jour.count > 0 ? 'text-[#1a2e5a]' : 'text-gray-300'
+                  }`}>
+                    {jour.count > 0 ? jour.count : '—'}
                   </div>
-                  <div className={`text-xs mt-1 ${i === 0 && jour.count > 0 ? 'text-white' : 'text-gray-400'}`}>
+                  <div className={`text-xs mt-1 leading-tight ${
+                    i === 0 && jour.count > 0 ? 'text-white' : 'text-gray-400'
+                  }`}>
                     {jour.label}
                   </div>
+                  {i === 0 && jour.count > 0 && (
+                    <div className="text-xs text-white mt-1 font-medium">À faire !</div>
+                  )}
                 </div>
               ))}
-            </div>
-            <div className="mt-4 text-xs text-gray-400">
-              Intervalles : 1j → 3j → 7j → 14j → 1 mois → 3 mois
             </div>
           </div>
         )}
