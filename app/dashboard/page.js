@@ -6,6 +6,15 @@ import { useRouter } from 'next/navigation'
 export default function Dashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    flashcardsTotal: 0,
+    flashcardsAReviser: 0,
+    quizTotal: 0,
+    quizMoyenne: 0,
+    meilleureMatiere: '-',
+    flashcardsNiveau: { 0: 0, 1: 0, 2: 0, 3: 0 },
+    derniersQuiz: [],
+  })
   const router = useRouter()
   const supabase = createClient()
 
@@ -13,10 +22,67 @@ export default function Dashboard() {
     const getUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) router.push('/auth')
-      else { setUser(user); setLoading(false) }
+      else {
+        setUser(user)
+        await chargerStats(user.id)
+        setLoading(false)
+      }
     }
     getUser()
   }, [])
+
+  const chargerStats = async (userId) => {
+    // Flashcards
+    const { data: flashcards } = await supabase
+      .from('flashcards')
+      .select('*')
+      .eq('user_id', userId)
+
+    // Quiz
+    const { data: quizResults } = await supabase
+      .from('quiz_resultats')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (flashcards) {
+      const aReviser = flashcards.filter(fc => new Date(fc.prochaine_revision) <= new Date()).length
+      const niveaux = { 0: 0, 1: 0, 2: 0, 3: 0 }
+      flashcards.forEach(fc => {
+        const n = Math.min(fc.niveau || 0, 3)
+        niveaux[n]++
+      })
+
+      const quizMoyenne = quizResults?.length > 0
+        ? Math.round(quizResults.reduce((acc, q) => acc + q.pourcentage, 0) / quizResults.length)
+        : 0
+
+      // Meilleure matière
+      let meilleureMatiere = '-'
+      if (quizResults?.length > 0) {
+        const parMatiere = {}
+        quizResults.forEach(q => {
+          if (!parMatiere[q.matiere]) parMatiere[q.matiere] = []
+          parMatiere[q.matiere].push(q.pourcentage)
+        })
+        let meilleur = 0
+        Object.entries(parMatiere).forEach(([mat, scores]) => {
+          const moy = scores.reduce((a, b) => a + b, 0) / scores.length
+          if (moy > meilleur) { meilleur = moy; meilleureMatiere = mat }
+        })
+      }
+
+      setStats({
+        flashcardsTotal: flashcards.length,
+        flashcardsAReviser: aReviser,
+        quizTotal: quizResults?.length || 0,
+        quizMoyenne,
+        meilleureMatiere,
+        flashcardsNiveau: niveaux,
+        derniersQuiz: quizResults?.slice(0, 5) || [],
+      })
+    }
+  }
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -54,28 +120,88 @@ export default function Dashboard() {
 
       {/* HEADER */}
       <section className="bg-white border-b border-gray-200 px-8 py-8">
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-2xl font-bold text-[#1a2e5a]">Ravi de te revoir, {prenom} !</h1>
-          <p className="text-gray-400 text-sm mt-1">Votre parcours d'apprentissage se poursuit</p>
+        <div className="max-w-5xl mx-auto flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-[#1a2e5a]">Ravi de te revoir, {prenom} !</h1>
+            <p className="text-gray-400 text-sm mt-1">Votre parcours d'apprentissage se poursuit</p>
+          </div>
+          {stats.flashcardsAReviser > 0 && (
+            <a href="/flashcards" className="bg-[#d4af37] text-white px-4 py-2 rounded-xl text-sm font-medium hover:opacity-90 transition flex items-center gap-2">
+              🔔 {stats.flashcardsAReviser} carte{stats.flashcardsAReviser > 1 ? 's' : ''} à réviser
+            </a>
+          )}
         </div>
       </section>
 
-      {/* STATS */}
+      {/* STATS AVANCÉES */}
       <section className="px-8 py-8 max-w-5xl mx-auto">
         <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Vos progrès</h2>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { label: 'Conversations', value: '0', sub: 'Commencez à utiliser ORTHOS' },
-            { label: 'Flashcards révisées', value: '0', sub: 'Révisez vos premières fiches' },
-            { label: 'Quiz complétés', value: '0', sub: 'Testez vos connaissances' },
-          ].map((s) => (
-            <div key={s.label} className="bg-white border border-gray-200 rounded-xl p-5">
-              <div className="text-3xl font-bold text-[#1a2e5a] mb-1">{s.value}</div>
-              <div className="text-sm font-medium text-gray-600 mb-1">{s.label}</div>
-              <div className="text-xs text-gray-400">{s.sub}</div>
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-3xl font-bold text-[#1a2e5a] mb-1">{stats.flashcardsTotal}</div>
+            <div className="text-sm font-medium text-gray-600 mb-1">Flashcards créées</div>
+            <div className="text-xs text-gray-400">{stats.flashcardsAReviser > 0 ? `${stats.flashcardsAReviser} à réviser aujourd'hui` : 'Tout est à jour ✓'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-3xl font-bold text-[#1a2e5a] mb-1">{stats.quizTotal}</div>
+            <div className="text-sm font-medium text-gray-600 mb-1">Quiz complétés</div>
+            <div className="text-xs text-gray-400">{stats.quizTotal > 0 ? 'Continuez !' : 'Faites votre premier quiz'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className={`text-3xl font-bold mb-1 ${stats.quizMoyenne >= 80 ? 'text-green-500' : stats.quizMoyenne >= 50 ? 'text-[#d4af37]' : 'text-[#1a2e5a]'}`}>
+              {stats.quizMoyenne > 0 ? `${stats.quizMoyenne}%` : '-'}
             </div>
-          ))}
+            <div className="text-sm font-medium text-gray-600 mb-1">Moyenne aux quiz</div>
+            <div className="text-xs text-gray-400">{stats.quizMoyenne >= 80 ? 'Excellent niveau !' : stats.quizMoyenne >= 50 ? 'Bon niveau' : 'En progression'}</div>
+          </div>
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="text-lg font-bold text-[#1a2e5a] mb-1 truncate">{stats.meilleureMatiere}</div>
+            <div className="text-sm font-medium text-gray-600 mb-1">Meilleure matière</div>
+            <div className="text-xs text-gray-400">Basé sur vos quiz</div>
+          </div>
         </div>
+
+        {/* Progression flashcards par niveau */}
+        {stats.flashcardsTotal > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+            <h3 className="text-sm font-semibold text-gray-600 mb-4">Maîtrise des flashcards (répétitions espacées)</h3>
+            <div className="grid grid-cols-4 gap-3">
+              {[
+                { label: 'À apprendre', color: 'bg-gray-200', count: stats.flashcardsNiveau[0] },
+                { label: 'Débutant', color: 'bg-blue-200', count: stats.flashcardsNiveau[1] },
+                { label: 'Intermédiaire', color: 'bg-[#d4af37]', count: stats.flashcardsNiveau[2] },
+                { label: 'Maîtrisé', color: 'bg-green-400', count: stats.flashcardsNiveau[3] },
+              ].map(n => (
+                <div key={n.label} className="text-center">
+                  <div className={`${n.color} rounded-lg p-3 mb-2`}>
+                    <div className="text-xl font-bold text-white">{n.count}</div>
+                  </div>
+                  <div className="text-xs text-gray-500">{n.label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Derniers quiz */}
+        {stats.derniersQuiz.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
+            <h3 className="text-sm font-semibold text-gray-600 mb-4">Derniers quiz</h3>
+            <div className="space-y-3">
+              {stats.derniersQuiz.map(q => (
+                <div key={q.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                  <div>
+                    <div className="text-sm font-medium text-[#1a2e5a]">{q.matiere}</div>
+                    <div className="text-xs text-gray-400">{q.mode === 'examen' ? '🎓 Mode examen' : '📝 Entraînement'} · {new Date(q.created_at).toLocaleDateString('fr-FR')}</div>
+                  </div>
+                  <div className={`text-sm font-bold px-3 py-1 rounded-full ${q.pourcentage >= 80 ? 'bg-green-100 text-green-600' : q.pourcentage >= 50 ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-500'}`}>
+                    {q.pourcentage}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* QUICK ACCESS */}
@@ -95,26 +221,6 @@ export default function Dashboard() {
                 {item.cta}
               </a>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* WHAT'S NEXT */}
-      <section className="px-8 pb-12 max-w-5xl mx-auto">
-        <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Par où commencer ?</h2>
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { icon: '💬', title: 'Poser une question', desc: 'Commencez par poser une question juridique à ORTHOS.', href: '/chat' },
-            { icon: '📋', title: 'Générer une fiche', desc: 'Créez votre première fiche de révision sur un concept clé.', href: '/chat' },
-            { icon: '🏆', title: 'Défi quotidien', desc: 'Répondez à la question juridique du jour pour garder le rythme.', href: '/quiz' },
-          ].map((item) => (
-            <a key={item.title} href={item.href} className="bg-white border border-gray-200 rounded-xl p-5 hover:border-[#1a2e5a] transition flex gap-4 items-start">
-              <div className="text-2xl flex-shrink-0">{item.icon}</div>
-              <div>
-                <div className="font-medium text-[#1a2e5a] text-sm mb-1">{item.title}</div>
-                <div className="text-xs text-gray-400 leading-relaxed">{item.desc}</div>
-              </div>
-            </a>
           ))}
         </div>
       </section>
