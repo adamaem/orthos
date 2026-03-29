@@ -1,5 +1,6 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 const FLASHCARDS_DEFAULT = {
   'Droit civil': [
@@ -27,6 +28,23 @@ const FLASHCARDS_DEFAULT = {
   ],
 }
 
+// Algorithme SM-2 de répétition espacée
+function calculerProchainRevision(niveau, succes) {
+  const maintenant = new Date()
+  let joursAvant = 1
+  if (succes) {
+    if (niveau === 0) joursAvant = 1
+    else if (niveau === 1) joursAvant = 3
+    else if (niveau === 2) joursAvant = 7
+    else if (niveau === 3) joursAvant = 14
+    else joursAvant = 30
+  } else {
+    joursAvant = 1
+  }
+  maintenant.setDate(maintenant.getDate() + joursAvant)
+  return maintenant.toISOString()
+}
+
 export default function Flashcards() {
   const [mode, setMode] = useState('browse')
   const [categories, setCategories] = useState(FLASHCARDS_DEFAULT)
@@ -35,6 +53,9 @@ export default function Flashcards() {
   const [revealed, setRevealed] = useState(false)
   const [known, setKnown] = useState([])
   const [toReview, setToReview] = useState([])
+  const [user, setUser] = useState(null)
+  const [mesFlashcards, setMesFlashcards] = useState([])
+  const [chargement, setChargement] = useState(false)
 
   const [genText, setGenText] = useState('')
   const [genTitle, setGenTitle] = useState('')
@@ -42,6 +63,67 @@ export default function Flashcards() {
   const [genFileName, setGenFileName] = useState('')
   const [generating, setGenerating] = useState(false)
   const [genError, setGenError] = useState('')
+
+  // Récupérer l'utilisateur connecté
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) {
+        setUser(data.user)
+        chargerMesFlashcards(data.user.id)
+      }
+    })
+  }, [])
+
+  // Charger les flashcards sauvegardées
+  const chargerMesFlashcards = async (userId) => {
+    setChargement(true)
+    const { data, error } = await supabase
+      .from('flashcards')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    if (!error && data && data.length > 0) {
+      // Grouper par matière
+      const groupees = {}
+      data.forEach(card => {
+        const cat = card.matiere || 'Mes flashcards'
+        if (!groupees[cat]) groupees[cat] = []
+        groupees[cat].push({ q: card.question, r: card.reponse, id: card.id, niveau: card.niveau })
+      })
+      setCategories(prev => ({ ...groupees, ...prev }))
+      setMesFlashcards(data)
+    }
+    setChargement(false)
+  }
+
+  // Sauvegarder une flashcard dans Supabase
+  const sauvegarderFlashcard = async (question, reponse, matiere) => {
+    if (!user) return null
+    const { data, error } = await supabase.from('flashcards').insert({
+      user_id: user.id,
+      question,
+      reponse,
+      matiere,
+      niveau: 0,
+      prochaine_revision: new Date().toISOString(),
+      nb_revisions: 0,
+    }).select()
+    if (error) console.error('Erreur sauvegarde:', error)
+    return data?.[0] || null
+  }
+
+  // Mettre à jour le niveau après révision (répétition espacée)
+  const mettreAJourNiveau = async (cardId, succes, niveauActuel) => {
+    if (!user || !cardId) return
+    const nouveauNiveau = succes ? niveauActuel + 1 : 0
+    const prochaineRevision = calculerProchainRevision(niveauActuel, succes)
+    await supabase.from('flashcards').update({
+      niveau: nouveauNiveau,
+      prochaine_revision: prochaineRevision,
+      nb_revisions: (niveauActuel || 0) + 1,
+    }).eq('id', cardId)
+  }
 
   const cards = categories[selectedCat] || []
   const card = cards[index]
@@ -56,28 +138,42 @@ export default function Flashcards() {
     setToReview([])
   }
 
-  const handleKnown = () => { setKnown(prev => [...prev, index]); next() }
-  const handleReview = () => { setToReview(prev => [...prev, index]); next() }
-  const next = () => { setRevealed(false); if (index < total - 1) setIndex(index + 1); else setIndex(total) }
+  const handleKnown = () => {
+    if (card?.id) mettreAJourNiveau(card.id, true, card.niveau || 0)
+    setKnown(prev => [...prev, index])
+    next()
+  }
+
+  const handleReview = () => {
+    if (card?.id) mettreAJourNiveau(card.id, false, card.niveau || 0)
+    setToReview(prev => [...prev, index])
+    next()
+  }
+
+  const next = () => {
+    setRevealed(false)
+    if (index < total - 1) setIndex(index + 1)
+    else setIndex(total)
+  }
+
   const reset = () => { setIndex(0); setRevealed(false); setKnown([]); setToReview([]) }
 
   const handleFile = async (e) => {
-  const file = e.target.files[0]
-  if (!file) return
-  setGenFileName(file.name)
-
-  if (file.type === 'application/pdf') {
-    const formData = new FormData()
-    formData.append('file', file)
-    const res = await fetch('/api/parse-pdf', { method: 'POST', body: formData })
-    const data = await res.json()
-    setGenFile(data.text || '')
-  } else {
-    const reader = new FileReader()
-    reader.onload = (ev) => setGenFile(ev.target.result)
-    reader.readAsText(file)
+    const file = e.target.files[0]
+    if (!file) return
+    setGenFileName(file.name)
+    if (file.type === 'application/pdf') {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch('/api/parse-pdf', { method: 'POST', body: formData })
+      const data = await res.json()
+      setGenFile(data.text || '')
+    } else {
+      const reader = new FileReader()
+      reader.onload = (ev) => setGenFile(ev.target.result)
+      reader.readAsText(file)
+    }
   }
-}
 
   const generateFlashcards = async () => {
     if (!genTitle.trim()) { setGenError('Donnez un titre à votre set de flashcards.'); return }
@@ -94,7 +190,16 @@ export default function Flashcards() {
       })
       const data = await res.json()
       if (data.flashcards && data.flashcards.length > 0) {
-        setCategories(prev => ({ [genTitle]: data.flashcards, ...prev }))
+
+        // Sauvegarder chaque flashcard dans Supabase si connecté
+        const flashcardsAvecId = await Promise.all(
+          data.flashcards.map(async (fc) => {
+            const saved = await sauvegarderFlashcard(fc.q, fc.r, genTitle)
+            return { ...fc, id: saved?.id, niveau: 0 }
+          })
+        )
+
+        setCategories(prev => ({ [genTitle]: flashcardsAvecId, ...prev }))
         setSelectedCat(genTitle)
         setIndex(0)
         setRevealed(false)
@@ -113,6 +218,12 @@ export default function Flashcards() {
     }
     setGenerating(false)
   }
+
+  // Flashcards à réviser aujourd'hui (répétitions espacées)
+  const aReviserAujourdhui = mesFlashcards.filter(fc => {
+    const prochaine = new Date(fc.prochaine_revision)
+    return prochaine <= new Date()
+  })
 
   return (
     <main className="min-h-screen bg-[#f4f5f7] font-sans">
@@ -134,7 +245,15 @@ export default function Flashcards() {
       <section className="bg-[#f4f5f7] px-8 py-10 text-center">
         <h1 className="text-3xl font-bold text-[#1a2e5a] mb-2">Flashcards</h1>
         <p className="text-gray-500 mb-6">Révisez les notions clés ou générez vos propres flashcards depuis votre cours.</p>
-        <div className="flex gap-3 justify-center">
+
+        {/* Bandeau répétitions espacées */}
+        {user && aReviserAujourdhui.length > 0 && (
+          <div className="inline-flex items-center gap-2 bg-[#d4af37] text-white px-5 py-2 rounded-xl text-sm font-medium mb-4">
+            🔔 {aReviserAujourdhui.length} flashcard{aReviserAujourdhui.length > 1 ? 's' : ''} à réviser aujourd'hui
+          </div>
+        )}
+
+        <div className="flex gap-3 justify-center flex-wrap">
           <button onClick={() => setMode('browse')}
             className={`px-5 py-2 rounded-xl text-sm font-medium border transition ${mode === 'browse' ? 'bg-[#1a2e5a] text-white border-[#1a2e5a]' : 'bg-white border-gray-200 text-gray-500 hover:border-[#1a2e5a]'}`}>
             Réviser les flashcards
@@ -143,6 +262,12 @@ export default function Flashcards() {
             className={`px-5 py-2 rounded-xl text-sm font-medium border transition ${mode === 'generate' ? 'bg-[#1a2e5a] text-white border-[#1a2e5a]' : 'bg-white border-gray-200 text-gray-500 hover:border-[#1a2e5a]'}`}>
             ✨ Générer avec mon cours
           </button>
+          {!user && (
+            <a href="/auth"
+              className="px-5 py-2 rounded-xl text-sm font-medium border border-[#d4af37] text-[#d4af37] hover:bg-[#d4af37] hover:text-white transition">
+              🔒 Connectez-vous pour sauvegarder
+            </a>
+          )}
         </div>
       </section>
 
@@ -153,7 +278,11 @@ export default function Flashcards() {
           <div className="bg-white border border-gray-200 rounded-2xl p-8">
             <h2 className="text-xl font-bold text-[#1a2e5a] mb-2">Générer des flashcards avec l'IA</h2>
             <p className="text-sm text-gray-400 mb-6">Collez votre cours ou déposez un fichier — ORTHOS génère automatiquement des flashcards personnalisées.</p>
-
+            {!user && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 text-sm px-4 py-3 rounded-xl mb-4">
+                ⚠️ Connectez-vous pour sauvegarder vos flashcards et bénéficier des répétitions espacées.
+              </div>
+            )}
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Titre du set</label>
@@ -161,7 +290,6 @@ export default function Flashcards() {
                   placeholder="Ex: Contrats spéciaux L2"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#1a2e5a] text-gray-800" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Votre cours</label>
                 <textarea value={genText} onChange={e => setGenText(e.target.value)}
@@ -169,13 +297,11 @@ export default function Flashcards() {
                   rows={6}
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-[#1a2e5a] text-gray-800 resize-none" />
               </div>
-
               <div className="flex items-center gap-3">
                 <div className="flex-1 border-t border-gray-200"></div>
                 <span className="text-xs text-gray-400">ou</span>
                 <div className="flex-1 border-t border-gray-200"></div>
               </div>
-
               <label className={`flex items-center gap-3 border-2 border-dashed rounded-xl px-4 py-4 cursor-pointer transition ${genFileName ? 'border-green-400 bg-green-50' : 'border-gray-200 hover:border-[#1a2e5a]'}`}>
                 <span className="text-2xl">📎</span>
                 <div>
@@ -184,20 +310,13 @@ export default function Flashcards() {
                 </div>
                 <input type="file" accept=".pdf,.txt" className="hidden" onChange={handleFile} />
               </label>
-
               {genError && (
-                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">
-                  {genError}
-                </div>
+                <div className="bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-3 rounded-xl">{genError}</div>
               )}
-
               <button onClick={generateFlashcards} disabled={generating}
                 className="w-full bg-[#1a2e5a] text-white py-3 rounded-xl font-medium hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2">
                 {generating ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                    Génération en cours…
-                  </>
+                  <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>Génération en cours…</>
                 ) : '✨ Générer mes flashcards'}
               </button>
             </div>
@@ -241,6 +360,14 @@ export default function Flashcards() {
                     <>
                       <div className="text-4xl">💡</div>
                       <h2 className="text-lg font-semibold text-[#1a2e5a] mb-2">{card.q}</h2>
+                      {card.niveau > 0 && (
+                        <div className="flex gap-1">
+                          {[...Array(Math.min(card.niveau, 5))].map((_, i) => (
+                            <span key={i} className="text-[#d4af37] text-xs">★</span>
+                          ))}
+                          <span className="text-xs text-gray-400 ml-1">Niveau {card.niveau}</span>
+                        </div>
+                      )}
                       <div className="w-full border-t border-gray-100 pt-6">
                         <p className="text-gray-700 leading-relaxed">{card.r}</p>
                       </div>
