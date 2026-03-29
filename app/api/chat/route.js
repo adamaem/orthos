@@ -1,6 +1,6 @@
-import Anthropic from '@anthropic-ai/sdk'
+import Groq from 'groq-sdk'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
 const SYSTEM = `Tu es ORTHOS, un assistant juridique pédagogique spécialisé exclusivement en droit français. Tu réponds comme un professeur de faculté de droit expérimenté et bienveillant. Tes réponses sont rigoureuses, structurées et adaptées aux étudiants en licence ou master de droit.
 
@@ -17,12 +17,15 @@ export async function POST(req) {
   const { messages, modeInstruction } = await req.json()
   const systemFull = SYSTEM + (modeInstruction ? '\n\n' + modeInstruction : '')
 
-  const response = await client.messages.create({
-    model: 'claude-opus-4-5',
+  const completion = await client.chat.completions.create({
+    model: 'llama-3.3-70b-versatile',
+    messages: [
+      { role: 'system', content: systemFull },
+      ...messages.map(m => ({ role: m.role, content: m.content }))
+    ],
     max_tokens: 1500,
-    system: systemFull,
-    messages: messages.map(m => ({ role: m.role, content: m.content }))
   })
 
-  return Response.json({ reply: response.content[0].text })
+  const reply = completion.choices[0]?.message?.content || "Je n'ai pas pu traiter votre demande."
+  return Response.json({ reply })
 }
