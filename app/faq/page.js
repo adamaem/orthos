@@ -1,23 +1,11 @@
+'use client'
+import Navbar from '@/components/Navbar'
 export default function FAQ() {
   return (
     <main className="min-h-screen bg-white font-sans">
 
       {/* NAVBAR */}
-      <nav className="bg-white border-b border-gray-200 px-8 h-16 flex items-center sticky top-0 z-50">
-        <a href="/" className="flex items-center gap-3">
-          <img src="/logo.png" alt="Orthos" className="h-10 w-10 object-contain" />
-          <span className="text-[#1a2e5a] font-semibold text-xl">Orthos</span>
-        </a>
-        <div className="ml-auto flex items-center gap-8">
-          <a href="/" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Accueil</a>
-          <a href="/tarifs" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Tarifs</a>
-          <a href="/faq" className="text-sm text-[#1a2e5a] font-medium">FAQ</a>
-          <a href="/apropos" className="text-sm text-gray-500 hover:text-[#1a2e5a]">À propos</a>
-          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
-            Commencer gratuitement
-          </a>
-        </div>
-      </nav>
+      <Navbar active="/faq" />
 
       {/* HEADER */}
       <section className="bg-[#f4f5f7] px-8 py-20 text-center">
