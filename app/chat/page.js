@@ -1,6 +1,7 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
+import ReactMarkdown from 'react-markdown'
 
 const supabase = createClient()
 
@@ -15,6 +16,7 @@ const MODES = {
 
 export default function Chat() {
   const [user, setUser] = useState(null)
+  const [userAvatar, setUserAvatar] = useState(null)
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [mode, setMode] = useState('libre')
@@ -31,6 +33,7 @@ export default function Chat() {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) {
         setUser(data.user)
+        setUserAvatar(data.user.user_metadata?.avatar_url || null)
         chargerConversations(data.user.id)
       }
     })
@@ -40,7 +43,6 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // Charger toutes les conversations de l'utilisateur
   const chargerConversations = async (userId) => {
     setChargementConvs(true)
     const { data } = await supabase
@@ -53,7 +55,6 @@ export default function Chat() {
     setChargementConvs(false)
   }
 
-  // Ouvrir une conversation existante
   const ouvrirConversation = async (convId) => {
     const { data } = await supabase
       .from('conversations')
@@ -67,20 +68,15 @@ export default function Chat() {
     }
   }
 
-  // Sauvegarder ou mettre à jour la conversation
   const sauvegarderConversation = async (nouveauxMessages, modeActuel) => {
     if (!user) return
-
     const titre = nouveauxMessages.find(m => m.role === 'user')?.content?.substring(0, 50) || 'Nouvelle conversation'
-
     if (convActuelle) {
-      // Mettre à jour la conversation existante
       await supabase.from('conversations').update({
         messages: nouveauxMessages,
         updated_at: new Date().toISOString(),
       }).eq('id', convActuelle)
     } else {
-      // Créer une nouvelle conversation
       const { data } = await supabase.from('conversations').insert({
         user_id: user.id,
         titre,
@@ -89,12 +85,9 @@ export default function Chat() {
       }).select().single()
       if (data) setConvActuelle(data.id)
     }
-
-    // Rafraîchir la liste
     chargerConversations(user.id)
   }
 
-  // Supprimer une conversation
   const supprimerConversation = async (convId, e) => {
     e.stopPropagation()
     await supabase.from('conversations').delete().eq('id', convId)
@@ -174,6 +167,19 @@ export default function Chat() {
     return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
   }
 
+  // Avatar utilisateur
+  const UserAvatar = () => {
+    if (userAvatar) {
+      return <img src={userAvatar} alt="avatar" className="w-8 h-8 rounded-full object-cover flex-shrink-0 mt-1" />
+    }
+    const initiale = user?.user_metadata?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'
+    return (
+      <div className="w-8 h-8 rounded-full bg-[#d4af37] flex items-center justify-center text-white text-xs font-bold flex-shrink-0 mt-1">
+        {initiale}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#f4f5f7]">
 
@@ -195,8 +201,6 @@ export default function Chat() {
 
         {/* SIDEBAR */}
         <div className="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
-
-          {/* Nouvelle conversation */}
           <div className="p-3 border-b border-gray-100">
             <button onClick={nouvelleConversation}
               className="w-full bg-[#1a2e5a] text-white text-sm py-2 px-4 rounded-lg flex items-center gap-2 hover:opacity-90 transition">
@@ -204,7 +208,6 @@ export default function Chat() {
             </button>
           </div>
 
-          {/* Modes */}
           <div className="px-3 py-3 border-b border-gray-100">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">Modes</p>
             {Object.entries(MODES).map(([key, val]) => (
@@ -215,26 +218,19 @@ export default function Chat() {
             ))}
           </div>
 
-          {/* Historique conversations */}
           <div className="flex-1 overflow-y-auto px-3 py-3">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-2 mb-2">
               Historique {!user && <span className="normal-case font-normal">(connectez-vous)</span>}
             </p>
-
             {!user && (
               <a href="/auth" className="block text-xs text-center text-[#d4af37] border border-[#d4af37] rounded-lg px-3 py-2 hover:bg-amber-50 transition">
                 🔒 Se connecter pour sauvegarder
               </a>
             )}
-
-            {chargementConvs && (
-              <div className="text-xs text-gray-400 text-center py-4">Chargement…</div>
-            )}
-
+            {chargementConvs && <div className="text-xs text-gray-400 text-center py-4">Chargement…</div>}
             {conversations.length === 0 && user && !chargementConvs && (
               <div className="text-xs text-gray-400 px-2">Aucune conversation sauvegardée</div>
             )}
-
             {conversations.map(conv => (
               <div key={conv.id}
                 onClick={() => ouvrirConversation(conv.id)}
@@ -243,8 +239,7 @@ export default function Chat() {
                   <span className={`text-sm truncate flex-1 ${convActuelle === conv.id ? 'text-[#1a2e5a] font-medium' : 'text-gray-600'}`}>
                     {conv.titre}
                   </span>
-                  <button
-                    onClick={(e) => supprimerConversation(conv.id, e)}
+                  <button onClick={(e) => supprimerConversation(conv.id, e)}
                     className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition text-xs flex-shrink-0 ml-1">
                     ✕
                   </button>
@@ -261,9 +256,8 @@ export default function Chat() {
 
         {/* CHAT ZONE */}
         <div className="flex-1 flex flex-col overflow-hidden">
-
-          {/* MESSAGES */}
           <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4">
+
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center text-center py-20">
                 <img src="/logo.png" alt="Orthos" className="h-16 w-16 object-contain mb-4 opacity-80" />
@@ -290,19 +284,51 @@ export default function Chat() {
 
             {messages.map((msg, i) => (
               <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0 mt-1 ${msg.role === 'user' ? 'bg-gray-200 text-[#1a2e5a]' : 'bg-[#1a2e5a] text-[#d4af37]'}`}>
-                  {msg.role === 'user' ? 'SA' : 'OR'}
-                </div>
-                <div className={`max-w-2xl px-4 py-3 rounded-xl text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#1a2e5a] text-white rounded-tr-sm' : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>
+
+                {/* Avatar */}
+                {msg.role === 'assistant' ? (
+                  <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 mt-1 bg-white border border-gray-200 flex items-center justify-center">
+                    <img src="/logo.png" alt="Orthos" className="w-6 h-6 object-contain" />
+                  </div>
+                ) : (
+                  <div className="flex-shrink-0 mt-1">
+                    {userAvatar ? (
+                      <img src={userAvatar} alt="avatar" className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-[#d4af37] flex items-center justify-center text-white text-xs font-bold">
+                        {user?.user_metadata?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Bulle message */}
+                <div className={`max-w-2xl px-4 py-3 rounded-xl text-sm leading-relaxed ${msg.role === 'user'
+                  ? 'bg-[#1a2e5a] text-white rounded-tr-sm'
+                  : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'}`}>
                   {msg.file && <div className="text-xs opacity-60 mb-2">📎 {msg.file}</div>}
-                  <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+
+                  {msg.role === 'assistant' ? (
+                    <div className="prose prose-sm max-w-none
+                      prose-headings:text-[#1a2e5a] prose-headings:font-bold
+                      prose-h1:text-base prose-h2:text-sm prose-h3:text-sm
+                      prose-strong:text-[#1a2e5a] prose-strong:font-semibold
+                      prose-ul:my-1 prose-ol:my-1 prose-li:my-0
+                      prose-p:my-1 prose-p:leading-relaxed">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : (
+                    <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+                  )}
                 </div>
               </div>
             ))}
 
             {loading && (
               <div className="flex gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#1a2e5a] flex items-center justify-center text-xs font-semibold text-[#d4af37] flex-shrink-0">OR</div>
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-white border border-gray-200 flex items-center justify-center flex-shrink-0">
+                  <img src="/logo.png" alt="Orthos" className="w-6 h-6 object-contain" />
+                </div>
                 <div className="bg-white border border-gray-200 rounded-xl rounded-tl-sm px-4 py-3 flex gap-1 items-center">
                   <span className="w-2 h-2 bg-[#1a2e5a] rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
                   <span className="w-2 h-2 bg-[#1a2e5a] rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
