@@ -2,8 +2,6 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 
-const supabase = createClient()
-
 const FLASHCARDS_DEFAULT = {
   'Droit civil': [
     { q: "Qu'est-ce que la responsabilité civile délictuelle ?", r: "C'est l'obligation de réparer le dommage causé à autrui par son fait personnel, le fait des choses ou le fait d'autrui. Elle est fondée sur les articles 1240 et suivants du Code civil." },
@@ -48,6 +46,7 @@ function calculerProchainRevision(niveau, succes) {
 }
 
 export default function Flashcards() {
+  const supabase = createClient() 
   const [mode, setMode] = useState('browse')
   const [categories, setCategories] = useState(FLASHCARDS_DEFAULT)
   const [selectedCat, setSelectedCat] = useState(Object.keys(FLASHCARDS_DEFAULT)[0])

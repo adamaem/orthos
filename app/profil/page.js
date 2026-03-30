@@ -3,8 +3,6 @@ import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
-const supabase = createClient()
-
 const ANNEES = ['L1', 'L2', 'L3', 'M1', 'M2', 'Doctorat', 'Autre']
 const UNIVERSITES = [
   'Paris I Panthéon-Sorbonne', 'Paris II Assas', 'Paris X Nanterre',
@@ -13,6 +11,7 @@ const UNIVERSITES = [
 ]
 
 export default function Profil() {
+  const supabase = createClient()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)

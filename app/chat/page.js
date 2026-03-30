@@ -3,8 +3,6 @@ import { useState, useRef, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
 import ReactMarkdown from 'react-markdown'
 
-const supabase = createClient()
-
 const MODES = {
   libre: { label: 'Question libre', placeholder: 'Posez votre question juridique…', instruction: '' },
   dissertation: { label: 'Dissertation', placeholder: 'Donnez votre sujet de dissertation…', instruction: 'MODE DISSERTATION : Propose une problématique percutante puis un plan détaillé I./II. avec A./B., arguments et références pour chaque partie.' },
@@ -15,6 +13,7 @@ const MODES = {
 }
 
 export default function Chat() {
+  const supabase = createClient()
   const [user, setUser] = useState(null)
   const [userAvatar, setUserAvatar] = useState(null)
   const [messages, setMessages] = useState([])

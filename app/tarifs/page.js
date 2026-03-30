@@ -1,4 +1,26 @@
+'use client'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
+
 export default function Tarifs() {
+  const [user, setUser] = useState(null)
+  const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUser(data.user)
+    })
+  }, [])
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    router.push('/')
+  }
+
+  const prenom = user?.user_metadata?.full_name?.split(' ')[0] || null
+
   return (
     <main className="min-h-screen bg-white font-sans">
 
@@ -13,9 +35,21 @@ export default function Tarifs() {
           <a href="/tarifs" className="text-sm text-[#1a2e5a] font-medium">Tarifs</a>
           <a href="/faq" className="text-sm text-gray-500 hover:text-[#1a2e5a]">FAQ</a>
           <a href="/apropos" className="text-sm text-gray-500 hover:text-[#1a2e5a]">À propos</a>
-          <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
-            Commencer gratuitement
-          </a>
+          {user ? (
+            <div className="flex items-center gap-4">
+              <a href="/dashboard" className="text-sm text-gray-500 hover:text-[#1a2e5a]">Dashboard</a>
+              <a href="/profil" className="w-8 h-8 rounded-full bg-[#1a2e5a] flex items-center justify-center text-[#d4af37] font-bold text-sm hover:opacity-80 transition">
+                {prenom?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase()}
+              </a>
+              <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-red-500 transition">
+                Déconnexion
+              </button>
+            </div>
+          ) : (
+            <a href="/auth" className="bg-[#1a2e5a] text-white text-sm px-4 py-2 rounded-lg hover:opacity-90 transition">
+              Commencer gratuitement
+            </a>
+          )}
         </div>
       </nav>
 
@@ -34,12 +68,9 @@ export default function Tarifs() {
         <div className="max-w-5xl mx-auto grid grid-cols-3 gap-8">
           {[
             {
-              name: 'Gratuit',
-              price: '0€',
-              period: '/ mois',
+              name: 'Gratuit', price: '0€', period: '/ mois',
               desc: 'Pour découvrir ORTHOS sans engagement.',
-              cta: 'Commencer maintenant',
-              featured: false,
+              cta: 'Commencer maintenant', featured: false,
               footer: 'Sans carte bancaire',
               features: [
                 { label: 'Calendrier', ok: true },
@@ -57,12 +88,9 @@ export default function Tarifs() {
               ]
             },
             {
-              name: 'Mensuel',
-              price: '9€',
-              period: '/ mois',
+              name: 'Mensuel', price: '9€', period: '/ mois',
               desc: 'Accès complet, sans engagement annuel.',
-              cta: 'Commencer maintenant',
-              featured: false,
+              cta: 'Commencer maintenant', featured: false,
               footer: 'Paiement sécurisé Stripe',
               features: [
                 { label: 'Calendrier', ok: true },
@@ -80,12 +108,9 @@ export default function Tarifs() {
               ]
             },
             {
-              name: 'Annuel',
-              price: '79€',
-              period: '/ an (6,58€ / mois)',
-              desc: 'La meilleure offre pour toute l\'année universitaire.',
-              cta: 'Commencer maintenant',
-              featured: true,
+              name: 'Annuel', price: '79€', period: '/ an (6,58€ / mois)',
+              desc: "La meilleure offre pour toute l'année universitaire.",
+              cta: 'Commencer maintenant', featured: true,
               footer: 'Support client prioritaire',
               features: [
                 { label: 'Calendrier', ok: true },
