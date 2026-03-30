@@ -275,9 +275,9 @@ export default function Dashboard() {
               </span>
             </button>
           )}
-          <div className="w-8 h-8 rounded-full bg-[#1a2e5a] flex items-center justify-center text-[#d4af37] font-bold text-sm">
-            {prenom[0].toUpperCase()}
-          </div>
+           <a href="/profil" className="w-8 h-8 rounded-full bg-[#1a2e5a] flex items-center justify-center text-[#d4af37] font-bold text-sm hover:opacity-80 transition">
+          {prenom[0].toUpperCase()} 
+          </a> 
           <button onClick={handleLogout} className="text-sm text-gray-400 hover:text-red-500 transition">
             Déconnexion
           </button>
